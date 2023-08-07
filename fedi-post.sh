@@ -23,9 +23,8 @@ file_status() {
 	local file="$1"
 	local id="$(head -1 "$file" | awk '{print $3}')"
 	local url="$(head -1 "$file" | awk '{print $4}')"
-	tail +4 "$file" \
-		| sanitize_text \
-		| grep -v "$id"
+	tail +2 "$file" \
+		| sanitize_text
 	if test -n "$url"; then
 		printf '<br/>[<a href=\\"%s\\">Originala afiŝo</a>]\\n' "$url"
 	fi
@@ -35,12 +34,16 @@ file_status() {
 # Turns a space-delimited list of uploaded media-IDs into a JSON array.
 media_json() {
 	local ids="$1"
-	echo "$ids" \
-		| sed 's%^ %%' \
-		| sed 's% $%%' \
-		| sed 's%^%["%' \
-		| sed 's% %","%g' \
-		| sed 's%$%"]%'
+	if test -n "$ids"; then
+		echo "$ids" \
+			| sed 's%^ %%' \
+			| sed 's% $%%' \
+			| sed 's%^%["%' \
+			| sed 's% %","%g' \
+			| sed 's%$%"]%'
+	else
+		echo ""
+	fi
 }
 
 
