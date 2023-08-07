@@ -11,6 +11,7 @@
 # Given a JSON file containing /api/v1/accounts/$user/statuses output,
 # output a post at the given index from the file like so:
 #     FAVOURITE_COUNT DATE_POSTED POST_ID POST_URL
+#     [spoiler: SPOILER_TEXT]
 #     [media: URL DESCRIPTION]
 #     [media: URL DESCRIPTION]
 #     [CONTENT…]
@@ -18,11 +19,16 @@
 output_post_of_index() {
 	local index="$1"
 	local file="$2"
-	jq -r --arg INDEX "$index" \
-'.[$INDEX|tonumber] | "\(.favourites_count) \(.created_at) \(.id) \(.url)
-\(.media_attachments[] | "media: " + .url + " " + .description)
+	if test "$(jq -r --arg INDEX "$index" '.[$INDEX|tonumber]' < "$file")" = "null"; then
+		return 1
+	else
+		jq -r --arg INDEX "$index" \
+		   '.[$INDEX|tonumber] | "\(.favourites_count) \(.created_at) \(.id) \(.url)
+\("spoiler: " + .spoiler_text)
+\(if (.media_attachments | length) > 0 then .media_attachments[] | "media: " + .url + " " + .description else "" end)
 \(.content)"' \
-	< "$file"
+		   < "$file"
+	fi
 }
 
 
