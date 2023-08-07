@@ -8,18 +8,24 @@
 #―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 
 
+sanitize_text() {
+	grep -v ^media: \
+		| grep -v ^spoiler: \
+		| sed 's%\\%\\\\%g' \
+		| sed 's%"%\\"%g' \
+		| sed -z 's%\n%\\n%g'
+}
+
+
 # Outputs only the status text of a user's post, with a link to the original
 # appended to the bottom.
 file_status() {
 	local file="$1"
 	local id="$(head -1 "$file" | awk '{print $3}')"
 	local url="$(head -1 "$file" | awk '{print $4}')"
-	tail +2 "$file" \
-		| grep -v ^media: \
-		| grep -v "$id" \
-		| sed 's%\\%\\\\%g' \
-		| sed 's%"%\\"%g' \
-		| sed -z 's%\n%\\n%g'
+	tail +4 "$file" \
+		| sanitize_text \
+		| grep -v "$id"
 	if test -n "$url"; then
 		printf '<br/>[<a href=\\"%s\\">Originala afiŝo</a>]\\n' "$url"
 	fi
@@ -43,9 +49,14 @@ media_json() {
 post_json() {
 	local message="$1"
 	local media_ids="$2"
-	printf '{ "content_type": "text/html", "visibility": "unlisted"'
+	local spoiler="$3"
+
+	printf '{ "content_type": "text/html", "visibility": "unlisted",'
+	if test -n "$spoiler"; then
+		printf ' "spoiler_text": "%s", ' "$(echo "$spoiler" | sanitize_text)"
+	fi
 	if test -n "$media_ids"; then
-		printf ', "media_ids": %s, ' "$media_ids"
+		printf ' "media_ids": %s, ' "$media_ids"
 	fi
 	printf '"status": "%s" }\n' "$message"
 }
@@ -69,11 +80,12 @@ post_media() {
 post_status() {
 	local message="$1"
 	local media_ids="$2"
+	local spoiler="$3"
 
 	curl --request POST \
 		 --header "Authorization: Bearer $FEDI_AUTH" \
 		 --header "Content-Type: application/json" \
-		 --data "$(post_json "$message" "$media_ids")" \
+		 --data "$(post_json "$message" "$media_ids" "$spoiler" | tr -d '\n')" \
 		 "https://jam.xwx.moe/api/v1/statuses"
 }
 
@@ -94,8 +106,10 @@ post_archived_post() {
 		rm "$(basename "$url")"
 	done
 
+	local spoiler="$(grep "^spoiler: " "$file" | sed 's%^spoiler: %%')"
+
 	printf '%s ' "$(head -1 "$file" | awk '{print $1, $2}')"
-	post_status "$(file_status "$file")" "$(media_json "$ids")" \
+	post_status "$(file_status "$file")" "$(media_json "$ids")" "$spoiler" \
 		| jq -r .uri
 }
 
